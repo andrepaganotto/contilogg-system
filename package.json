@@ -1,0 +1,17 @@
+{
+  "name": "contilogg",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "npx nodemon src/server.js"
+  },
+  "keywords": [],
+  "author": "chatgpt",
+  "license": "MIT",
+  "description": "",
+  "dependencies": {
+    "express": "^5.1.0",
+    "playwright": "^1.54.2"
+  }
+}
