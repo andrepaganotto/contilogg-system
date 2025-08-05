@@ -58,7 +58,7 @@
       "meta": {
         "role": null,
         "text": null,
-        "networkTriggered": true
+        "networkTriggered": false
       }
     },
     {
