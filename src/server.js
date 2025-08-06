@@ -68,10 +68,12 @@ function buildLoginInfo(req) {
   return { usernameValue, passwordValue };
 }
 
-function validateKeys(required, provided, { allowPartial = false } = {}) {
-  const invalid = provided.filter((k) => !required.includes(k));
-  if (invalid.length) {
-    throw new Error(`Chaves inválidas: ${invalid.join(', ')}`);
+function validateKeys(required, provided, { allowPartial = false, allowExtra = false } = {}) {
+  if (!allowExtra) {
+    const invalid = provided.filter((k) => !required.includes(k));
+    if (invalid.length) {
+      throw new Error(`Chaves inválidas: ${invalid.join(', ')}`);
+    }
   }
   if (!allowPartial) {
     const missing = required.filter((k) => !provided.includes(k));
@@ -170,7 +172,7 @@ app.post('/cadastrar/:categoria', async (req, res) => {
 
   const required = getStepKeys(mapa);
   const bodyKeys = Object.keys(req.body || {});
-  try { validateKeys(required, bodyKeys); } catch (e) {
+  try { validateKeys(required, bodyKeys, { allowExtra: true }); } catch (e) {
     return res.status(400).json({ error: e.message });
   }
 
