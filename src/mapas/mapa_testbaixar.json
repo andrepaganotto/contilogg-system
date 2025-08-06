@@ -34,27 +34,8 @@
       }
     },
     {
-      "action": "click",
-      "selector": "#formCad\\:tablepcte\\:0\\:dacte",
-      "meta": {
-        "role": null,
-        "text": "DACTE",
-        "networkTriggered": false
-      }
-    },
-    {
       "action": "download",
-      "selector": "html",
-      "url": "http://sitesat.ontransportes.com.br:8100/sitesat2/consPainelCte.jsf?dswid=-2721",
-      "meta": {
-        "fromPdfViewer": true,
-        "suggestedFilename": "consPainelCte.jsf?dswid=-2721",
-        "downloadDir": null,
-        "anchorSelector": "#formCad\\:tablepcte\\:0\\:dacte",
-        "role": null,
-        "text": "DACTE",
-        "networkTriggered": false
-      }
+      "selector": "#formCad\\:tablepcte\\:0\\:dacte"
     },
     {
       "action": "click",

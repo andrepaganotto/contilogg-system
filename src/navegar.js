@@ -9,6 +9,28 @@ const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 
+function ensurePdfName(filename, resUrl = '') {
+    let name = filename || '';
+    if (!name && resUrl) {
+        const qs = new URL(resUrl, 'http://dummy').searchParams;
+        const fromQS = qs.get('filename') || qs.get('fileName') || qs.get('download') || '';
+        if (fromQS) name = fromQS;
+    }
+    if (!name) {
+        const noQuery = (resUrl || '').split('?')[0];
+        name = noQuery.split('/').pop() || 'document.pdf';
+    }
+    name = name.replace(/["']/g, '').trim();
+    if (!/\.pdf$/i.test(name)) name += '.pdf';
+    return name;
+}
+
+function isPdfBuffer(buf) {
+    if (!buf || buf.length < 5) return false;
+    try { return buf.slice(0, 5).toString() === '%PDF-'; }
+    catch { return false; }
+}
+
 /**
  * @typedef {Object} LoginInfo
  * @property {string} usernameValue
@@ -44,7 +66,7 @@ async function runMapa({ url, loginInfo, dados = {}, mapa, options = {} }) {
         timeoutMs = 15000,
         typeDelayMs = 50,
         resultWaitMs = 3000,
-        downloadDir = "C:\\Users\andre\\Desktop\\arquivos_baixados"
+        downloadDir = "C:\\Users\\andre\\Desktop\\arquivos_baixados"
     } = options;
 
     let downloadedPath = null;
@@ -87,9 +109,16 @@ async function runMapa({ url, loginInfo, dados = {}, mapa, options = {} }) {
         throw new Error(`Arquivo(s) ausentes: ${d}`);
     }
 
-    /* ---------- Playwright boilerplate ---------- */
-    const browser = await chromium.launch({ headless });
-    const context = await browser.newContext();
+    // Contexto persistente para poder aplicar flags de PDF viewer
+    const userDataDir = options.userDataDir || path.join(process.cwd(), '.pw-profile');
+    const context = await chromium.launchPersistentContext(userDataDir, {
+        headless,
+        acceptDownloads: true,
+        args: [
+            '--disable-pdf-viewer',            // tenta desabilitar o viewer nativo
+            '--allow-running-insecure-content' // (opcional, ajuda em ambientes legados)
+        ]
+    });
     const page = await context.newPage();
 
     const inflight = new Map();                      // request -> timestamp
@@ -126,7 +155,6 @@ async function runMapa({ url, loginInfo, dados = {}, mapa, options = {} }) {
 
     const closeAll = async () => {
         try { await context.close(); } catch { }
-        try { await browser.close(); } catch { }
     };
 
     const CLICKABLE = `
@@ -267,49 +295,109 @@ async function runMapa({ url, loginInfo, dados = {}, mapa, options = {} }) {
                 }
 
                 case 'download': {
-                    const dir = meta.downloadDir || downloadDir;
+                    const dir = downloadDir;
                     try { fs.mkdirSync(dir, { recursive: true }); } catch { /* ignore */ }
 
-                    // Se veio do viewer de PDF, baixe via contexto de requisição (compartilha cookies)
-                    if (meta.fromPdfViewer && step.url) {
+                    let downloadedOnce = false;
+
+                    // --- Interceptação temporária para forçar "attachment" em PDFs reais ---
+                    const routeHandler = async (route) => {
                         try {
-                            const resp = await context.request.get(step.url, { timeout: timeoutMs });
-                            if (!resp.ok()) throw new Error(`HTTP ${resp.status()}`);
-                            const buf = await resp.body();
+                            // Evita rodar duas vezes se já baixou
+                            if (downloadedOnce) return route.continue();
 
-                            // nome sugerido ou derive da URL
-                            const name = (meta.suggestedFilename && String(meta.suggestedFilename).trim())
-                                || step.url.split('/').pop()
-                                || 'document.pdf';
+                            // Busca a resposta original
+                            const resp = await route.fetch();
+                            const headers = resp.headers();
+                            const ct = (headers['content-type'] || headers['Content-Type'] || '').toLowerCase();
 
-                            const saveAs = path.join(dir, name);
-                            fs.writeFileSync(saveAs, buf);
-                            downloadedPath = saveAs;
-                            break; // <<<<< importante: NÃO clicar novamente no seletor
-                        } catch (e) {
-                            // fallback: se falhar o GET autenticado, tenta fluxo antigo abaixo
-                            // (clicar e esperar evento "download")
+                            if (ct.includes('application/pdf')) {
+                                const body = await resp.body();
+
+                                // Só trata como PDF se o magic number for válido
+                                if (isPdfBuffer(body)) {
+                                    // Força Content-Disposition: attachment para disparar evento "download"
+                                    const fulfilledHeaders = { ...headers, 'Content-Disposition': 'attachment; filename="document.pdf"' };
+                                    await route.fulfill({ status: resp.status(), headers: fulfilledHeaders, body });
+                                    return;
+                                }
+                            }
+
+                            // Não é PDF real? segue fluxo normal
+                            await route.continue();
+                        } catch {
+                            try { await route.continue(); } catch { /* ignora */ }
+                        }
+                    };
+
+                    // Ativa o route **antes** do clique para não perder a resposta
+                    await context.route('**/*', routeHandler);
+
+                    // Algumas páginas abrem popup; vamos observar
+                    const popups = [];
+                    const onPage = (p) => popups.push(p);
+                    context.on('page', onPage);
+
+                    // Dispara o clique do step de download
+                    await robustClick({ selector });
+
+                    // --- Tentativa 1: download nativo na aba atual ---
+                    const dlMain = await page.waitForEvent('download', { timeout: Math.min(6000, timeoutMs) }).catch(() => null);
+                    if (dlMain) {
+                        const filename = ensurePdfName(dlMain.suggestedFilename());
+                        const saveAs = path.join(dir, filename);
+                        try { await dlMain.saveAs(saveAs); } catch { /* fallback abaixo */ }
+                        try { downloadedPath = downloadedPath || saveAs || await dlMain.path(); } catch { }
+                        downloadedOnce = !!downloadedPath;
+                    }
+
+                    // --- Tentativa 2: popups que disparem download nativo ---
+                    if (!downloadedOnce) {
+                        // pequena janela para popup nascer
+                        await page.waitForTimeout(1000).catch(() => { });
+
+                        for (const pop of popups) {
+                            try {
+                                await pop.waitForLoadState('domcontentloaded', { timeout: 7000 }).catch(() => { });
+
+                                // Espera um possível download nativo vindo da popup
+                                const dlPop = await pop.waitForEvent('download', { timeout: 3000 }).catch(() => null);
+                                if (dlPop) {
+                                    const filename = ensurePdfName(dlPop.suggestedFilename());
+                                    const saveAs = path.join(dir, filename);
+                                    try { await dlPop.saveAs(saveAs); } catch { /* fallback abaixo */ }
+                                    try { downloadedPath = downloadedPath || saveAs || await dlPop.path(); } catch { }
+                                    downloadedOnce = !!downloadedPath;
+                                    try { await pop.close(); } catch { }
+                                    break;
+                                }
+
+                            } catch { /* ignora popup problemática */ }
+                            finally {
+                                try { await pop.close(); } catch { }
+                            }
                         }
                     }
 
-                    // Fluxo padrão: aguarda evento real de download disparado pelo clique
-                    const [dl] = await Promise.all([
-                        page.waitForEvent('download', { timeout: timeoutMs }),
-                        robustClick({ selector })
-                    ]);
-
-                    const filename = dl.suggestedFilename();
-                    const saveAs = path.join(dir, filename);
-                    try {
-                        await dl.saveAs(saveAs);
-                        downloadedPath = saveAs;
-                    } catch {
-                        try { downloadedPath = await dl.path(); } catch { /* mantém null */ }
+                    // --- Tentativa 3 (curta): algum download tardio após o forçar-attachment ---
+                    if (!downloadedOnce) {
+                        const dlLate = await page.waitForEvent('download', { timeout: Math.min(3000, timeoutMs) }).catch(() => null);
+                        if (dlLate) {
+                            const filename = ensurePdfName(dlLate.suggestedFilename());
+                            const saveAs = path.join(dir, filename);
+                            try { await dlLate.saveAs(saveAs); } catch { /* ignore */ }
+                            try { downloadedPath = downloadedPath || saveAs || await dlLate.path(); } catch { }
+                            downloadedOnce = !!downloadedPath;
+                        }
                     }
+
+                    // Desabilita a interceptação e listener de popup antes de sair
+                    try { await context.unroute('**/*', routeHandler); } catch { }
+                    context.off('page', onPage);
+
+                    // segue para os próximos passos (downloadedPath será retornado no final quando modo === 'download')
                     break;
                 }
-
-
 
                 default:
                     throw new Error(`Ação não suportada: ${action}`);
