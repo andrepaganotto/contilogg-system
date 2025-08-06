@@ -1,5 +1,6 @@
 {
-  "modo": "inserir",
+  "operacao": "cadastrar",
+  "categoria": "motorista",
   "login": {
     "username": "[name=\"formCad:nome\"]",
     "password": "[name=\"formCad:senha\"]",

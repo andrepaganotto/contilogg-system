@@ -1,5 +1,6 @@
 {
-  "modo": "consultar",
+  "operacao": "consultar",
+  "categoria": "motorista",
   "login": {
     "username": "[name=\"formCad:nome\"]",
     "password": "[name=\"formCad:senha\"]",
