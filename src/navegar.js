@@ -1,9 +1,9 @@
 // navegadorPlaywright.js
 //
-// Executa qualquer mapa Playwright (“consultar” ou “inserir”).
-// Retorna { resultFound: boolean|null }.
+// Executa qualquer mapa Playwright (“consultar”, “baixar”, “cadastrar” ou “editar”).
+// Retorna { resultFound: boolean|null, downloadedPath?: string }.
 //  • resultFound == true/false → só quando houver passo meta.resultSelector === true
-//  • resultFound == null       → mapa não possui passo-resultado (modo “inserir”)
+//  • resultFound == null       → mapa não possui passo-resultado
 
 const { chromium } = require('playwright');
 const fs = require('fs');
@@ -43,14 +43,14 @@ function isPdfBuffer(buf) {
  * @property {{[k:string]:any}=} meta
  *
  * @typedef {Object} Mapa
- * @property {"consultar"|"inserir"=} modo
+ * @property {"consultar"|"baixar"|"cadastrar"|"editar"} operacao
  * @property {{ username: string, password: string, submit: string }=} login
  * @property {MapaStep[]} steps
  * @property {string=} logout
  */
 
 /**
- * Executa um mapa Playwright (modo "consultar" ou "inserir").
+ * Executa um mapa Playwright (operações "consultar", "baixar", "cadastrar" ou "editar").
  *
  * @param {Object} params
  * @param {string} params.url
@@ -66,7 +66,8 @@ async function runMapa({ url, loginInfo, dados = {}, mapa, options = {} }) {
         timeoutMs = 15000,
         typeDelayMs = 50,
         resultWaitMs = 3000,
-        downloadDir = "C:\\Users\\andre\\Desktop\\arquivos_baixados"
+        downloadDir = "C:\\Users\\andre\\Desktop\\arquivos_baixados",
+        filename: desiredFilename
     } = options;
 
     let downloadedPath = null;
@@ -74,6 +75,8 @@ async function runMapa({ url, loginInfo, dados = {}, mapa, options = {} }) {
     if (!url) throw new Error('"url" é obrigatório');
     if (!mapa || !Array.isArray(mapa.steps))
         throw new Error('"mapa.steps" ausente ou inválido');
+
+    const allowOptional = mapa.operacao === 'editar';
 
     /* ---------- Valida login se existir ---------- */
     if (mapa.login) {
@@ -92,7 +95,10 @@ async function runMapa({ url, loginInfo, dados = {}, mapa, options = {} }) {
         const needKey = ['fill', 'upload', 'select'].includes(s.action);
         if (needKey) {
             if (!s.key) throw new Error(`Step ${s.action} precisa de key (${s.selector})`);
-            if (!(s.key in dados)) absentKeys.push(s.key);
+            if (!(s.key in dados)) {
+                if (!allowOptional) absentKeys.push(s.key);
+                continue;
+            }
             if (s.action === 'upload') {
                 const list = Array.isArray(dados[s.key]) ? dados[s.key] : [dados[s.key]];
                 list.forEach(f => {
@@ -235,7 +241,13 @@ async function runMapa({ url, loginInfo, dados = {}, mapa, options = {} }) {
                     const next = mapa.steps[i + 1];
                     const combo = next && next.action === 'press' && next.selector === selector;
                     let val = dados[key];
-                    if (val === undefined) throw new Error(`dados["${key}"] ausente`);
+                    if (val === undefined) {
+                        if (allowOptional) {
+                            if (combo) i++; // pula o press associado
+                            break;
+                        }
+                        throw new Error(`dados["${key}"] ausente`);
+                    }
                     if (combo) {
                         await typeHuman(loc, val, next.meta?.key || 'Enter');
                         if (next.meta?.networkTriggered) await quiet();
@@ -253,6 +265,10 @@ async function runMapa({ url, loginInfo, dados = {}, mapa, options = {} }) {
                 }
 
                 case 'upload': {
+                    if (dados[key] === undefined) {
+                        if (allowOptional) break;
+                        throw new Error(`dados["${key}"] ausente`);
+                    }
                     await loc.waitFor({ state: 'attached', timeout: timeoutMs });
                     const files = Array.isArray(dados[key]) ? dados[key] : [dados[key]];
                     await page.setInputFiles(selector, files);
@@ -260,6 +276,10 @@ async function runMapa({ url, loginInfo, dados = {}, mapa, options = {} }) {
                 }
 
                 case 'select': {
+                    if (dados[key] === undefined) {
+                        if (allowOptional) break;
+                        throw new Error(`dados["${key}"] ausente`);
+                    }
                     await loc.waitFor({ state: 'visible', timeout: timeoutMs });
                     const v = String(dados[key]);
                     await loc.selectOption(v).catch(async () => loc.selectOption({ label: v }));
@@ -344,7 +364,7 @@ async function runMapa({ url, loginInfo, dados = {}, mapa, options = {} }) {
                     // --- Tentativa 1: download nativo na aba atual ---
                     const dlMain = await page.waitForEvent('download', { timeout: Math.min(6000, timeoutMs) }).catch(() => null);
                     if (dlMain) {
-                        const filename = ensurePdfName(dlMain.suggestedFilename());
+                        const filename = ensurePdfName(desiredFilename || dlMain.suggestedFilename());
                         const saveAs = path.join(dir, filename);
                         try { await dlMain.saveAs(saveAs); } catch { /* fallback abaixo */ }
                         try { downloadedPath = downloadedPath || saveAs || await dlMain.path(); } catch { }
@@ -363,7 +383,7 @@ async function runMapa({ url, loginInfo, dados = {}, mapa, options = {} }) {
                                 // Espera um possível download nativo vindo da popup
                                 const dlPop = await pop.waitForEvent('download', { timeout: 3000 }).catch(() => null);
                                 if (dlPop) {
-                                    const filename = ensurePdfName(dlPop.suggestedFilename());
+                                    const filename = ensurePdfName(desiredFilename || dlPop.suggestedFilename());
                                     const saveAs = path.join(dir, filename);
                                     try { await dlPop.saveAs(saveAs); } catch { /* fallback abaixo */ }
                                     try { downloadedPath = downloadedPath || saveAs || await dlPop.path(); } catch { }
@@ -383,7 +403,7 @@ async function runMapa({ url, loginInfo, dados = {}, mapa, options = {} }) {
                     if (!downloadedOnce) {
                         const dlLate = await page.waitForEvent('download', { timeout: Math.min(3000, timeoutMs) }).catch(() => null);
                         if (dlLate) {
-                            const filename = ensurePdfName(dlLate.suggestedFilename());
+                            const filename = ensurePdfName(desiredFilename || dlLate.suggestedFilename());
                             const saveAs = path.join(dir, filename);
                             try { await dlLate.saveAs(saveAs); } catch { /* ignore */ }
                             try { downloadedPath = downloadedPath || saveAs || await dlLate.path(); } catch { }
@@ -395,7 +415,7 @@ async function runMapa({ url, loginInfo, dados = {}, mapa, options = {} }) {
                     try { await context.unroute('**/*', routeHandler); } catch { }
                     context.off('page', onPage);
 
-                    // segue para os próximos passos (downloadedPath será retornado no final quando modo === 'download')
+                    // segue para os próximos passos (downloadedPath será retornado no final quando operacao === 'baixar')
                     break;
                 }
 
@@ -410,7 +430,7 @@ async function runMapa({ url, loginInfo, dados = {}, mapa, options = {} }) {
         }
 
         await closeAll();
-        return { resultFound, downloadedPath: (mapa.modo === 'download') ? downloadedPath : null };
+        return { resultFound, downloadedPath: (mapa.operacao === 'baixar') ? downloadedPath : null };
     }
     catch (err) {
         await closeAll();
