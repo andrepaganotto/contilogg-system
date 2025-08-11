@@ -30,7 +30,7 @@
       "selector": "#formMenu\\:j_idt138",
       "meta": {
         "role": null,
-        "networkTriggered": false,
+        "networkTriggered": true,
         "text": "Motoristas"
       }
     },
@@ -39,7 +39,7 @@
       "selector": "[name=\"formmotoristaFil:novomotoristaFil\"]",
       "meta": {
         "role": null,
-        "networkTriggered": false,
+        "networkTriggered": true,
         "text": null
       }
     },
@@ -48,7 +48,7 @@
       "selector": "#formmotorista\\:intab0_1\\:header > span.rf-tab-lbl:nth-child(1)",
       "meta": {
         "role": null,
-        "networkTriggered": false,
+        "networkTriggered": true,
         "text": "B. Complemento"
       }
     },
