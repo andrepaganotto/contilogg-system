@@ -603,6 +603,28 @@
       }
     },
     {
+      "action": "click",
+      "selector": "[name=\"formmotorista:Motorista_funcionario\"]",
+      "meta": {
+        "role": null,
+        "networkTriggered": true,
+        "text": "Sim\n\tNão"
+      }
+    },
+    {
+      "action": "select",
+      "selector": "[name=\"formmotorista:Motorista_funcionario\"]",
+      "key": "funcionario",
+      "meta": {
+        "role": null,
+        "networkTriggered": false,
+        "options": [
+          "Sim",
+          "Não"
+        ]
+      }
+    },
+    {
       "action": "select",
       "selector": "[name=\"formmotorista:Motorista_filial\"]",
       "key": "filial",
