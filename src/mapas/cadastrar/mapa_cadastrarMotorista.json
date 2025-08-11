@@ -39,7 +39,7 @@
       "selector": "[name=\"formmotoristaFil:novomotoristaFil\"]",
       "meta": {
         "role": null,
-        "networkTriggered": true,
+        "networkTriggered": false,
         "text": null
       }
     },
@@ -48,7 +48,7 @@
       "selector": "#formmotorista\\:intab0_1\\:header > span.rf-tab-lbl:nth-child(1)",
       "meta": {
         "role": null,
-        "networkTriggered": true,
+        "networkTriggered": false,
         "text": "B. Complemento"
       }
     },
@@ -116,6 +116,19 @@
         "role": null,
         "networkTriggered": true,
         "text": "Masculino\n\tFeminino"
+      }
+    },
+    {
+      "action": "select",
+      "selector": "[name=\"formmotorista:Motorista_sexo\"]",
+      "key": "sexo",
+      "meta": {
+        "role": null,
+        "networkTriggered": false,
+        "options": [
+          "Masculino",
+          "Feminino"
+        ]
       }
     },
     {
