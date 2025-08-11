@@ -67,7 +67,9 @@ async function runMapa({ url, loginInfo, dados = {}, mapa, options = {} }) {
         typeDelayMs = 50,
         resultWaitMs = 3000,
         downloadDir = "C:\\Users\\andre\\Desktop\\arquivos_baixados",
-        filename: desiredFilename
+        filename: desiredFilename,
+        maxQuietMs = 1200,
+        longPollCutoffMs = 2000
     } = options;
 
     let downloadedPath = null;
@@ -127,6 +129,9 @@ async function runMapa({ url, loginInfo, dados = {}, mapa, options = {} }) {
     });
     const page = await context.newPage();
 
+    page.setDefaultTimeout(timeoutMs);
+    page.setDefaultNavigationTimeout(timeoutMs);
+
     const inflight = new Map();                      // request -> timestamp
     const isXhr = r => ['xhr', 'fetch'].includes(r.resourceType?.());
 
@@ -138,27 +143,21 @@ async function runMapa({ url, loginInfo, dados = {}, mapa, options = {} }) {
         if (isXhr(r)) inflight.delete(r);
     });
 
-    // Auxiliar para contar, ignorando “polling” >5 s
     const inflightCount = () => {
         const now = Date.now();
-        for (const [req, ts] of inflight) {
-            if (now - ts > 5000) inflight.delete(req);   // descarta long-poll
-        }
+        for (const [req, ts] of inflight) if (now - ts > longPollCutoffMs) inflight.delete(req);
         return inflight.size;
     };
-
-    const quiet = async (timeoutTotal = timeoutMs) => {
-        const start = Date.now();
-        if (inflightCount() === 0) return;
-
-        return new Promise((res, rej) => {
-            const tick = setInterval(() => {
-                if (inflightCount() === 0) { clearInterval(tick); res(); }
-                else if (Date.now() - start > timeoutTotal) { clearInterval(tick); rej(new Error('timeout aguardando XHR')); }
-            }, 25);
-        });
+    const quiet = async (deadline = maxQuietMs) => {
+        const start = Date.now(); let lastChange = Date.now(); let lastCount = inflightCount();
+        while (Date.now() - start < deadline) {
+            const c = inflightCount();
+            if (c === 0) return;
+            if (c !== lastCount) { lastCount = c; lastChange = Date.now(); }
+            if (Date.now() - lastChange >= 300) return; // estável o bastante
+            await new Promise(r => setTimeout(r, 40));
+        }
     };
-
     const closeAll = async () => {
         try { await context.close(); } catch { }
     };
@@ -172,30 +171,20 @@ async function runMapa({ url, loginInfo, dados = {}, mapa, options = {} }) {
     const robustClick = async ({ selector }) => {
         const loc = page.locator(selector).first();
         await loc.waitFor({ state: 'attached', timeout: timeoutMs });
-        try {
-            await loc.waitFor({ state: 'visible', timeout: 400 });
-            await loc.click({ timeout: timeoutMs });
-            return;
-        } catch {/* continua */ }
-        // fallback: sobe a árvore procurando algo clicável visível
-        const handle = await loc.elementHandle();
-        let h = handle;
-        while (h) {
-            const vis = await h.evaluate(el => {
+        try { await loc.click({ timeout: 400 }); return; } catch { }
+        const h = await loc.elementHandle();
+        let cur = h;
+        while (cur) {
+            const ok = await cur.evaluate(el => {
                 const r = el.getClientRects(); if (!r.length) return false;
                 const cs = getComputedStyle(el);
                 return !(cs.display === 'none' || cs.visibility === 'hidden' || +cs.opacity === 0);
             });
-            if (vis) {
-                try { await h.click({ timeout: timeoutMs }); break; }
-                catch {/* ignorar */ }
-            }
-            const parent = await h.evaluateHandle(el => el.parentElement);
-            const isNull = await parent.evaluate(p => p === null);
-            if (isNull) break;
-            h = parent;
+            if (ok) { try { await cur.click({ timeout: 600 }); break; } catch { } }
+            const p = await cur.evaluateHandle(el => el.parentElement);
+            if (await p.evaluate(v => v == null)) break; cur = p;
         }
-        try { await handle.dispose(); } catch { }
+        try { await h.dispose(); } catch { }
     };
 
     /* ---------- helpers específicos ---------- */
@@ -250,9 +239,13 @@ async function runMapa({ url, loginInfo, dados = {}, mapa, options = {} }) {
                     }
                     if (combo) {
                         await typeHuman(loc, val, next.meta?.key || 'Enter');
-                        if (next.meta?.networkTriggered) await quiet();
-                        i++; // pula o press
-                    } else {
+                        await Promise.race([
+                            page.locator('.rf-au-lst,.rf-au-itm').first().waitFor({ state: 'hidden', timeout: 800 }),
+                            quiet(800)
+                        ]).catch(() => { });
+                        i++;
+                    }
+                    else {
                         await loc.fill(String(val));
                         if (meta.expectedUrl) {
                             try {
