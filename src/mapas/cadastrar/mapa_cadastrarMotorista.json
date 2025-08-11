@@ -638,7 +638,7 @@
     {
       "action": "upload",
       "selector": "#formmotorista\\:tableFotos\\:1\\:selecionarFoto > div.rf-fu-hdr:nth-child(1) > span.rf-fu-btns-lft:nth-child(1) > span.rf-fu-btn-add:nth-child(1) > span.rf-fu-btn-cnt-add:nth-child(1) > span.rf-fu-inp-cntr:nth-child(1) > input.rf-fu-inp:nth-child(1)",
-      "key": "foto_qrcode",
+      "key": "foto_motorista_cnh",
       "meta": {
         "role": null,
         "networkTriggered": true,
@@ -649,7 +649,7 @@
     {
       "action": "upload",
       "selector": "#formmotorista\\:tableFotos\\:2\\:selecionarFoto > div.rf-fu-hdr:nth-child(1) > span.rf-fu-btns-lft:nth-child(1) > span.rf-fu-btn-add:nth-child(1) > span.rf-fu-btn-cnt-add:nth-child(1) > span.rf-fu-inp-cntr:nth-child(1) > input.rf-fu-inp:nth-child(1)",
-      "key": "foto_motorista",
+      "key": "foto_motorista_cavalo",
       "meta": {
         "role": null,
         "networkTriggered": true,
