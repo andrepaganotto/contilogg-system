@@ -72,6 +72,14 @@ async function runMapa({ url, loginInfo, dados = {}, mapa, options = {} }) {
         longPollCutoffMs = 2000
     } = options;
 
+    // --- LOG / DEBUG ---------------------------------------------------------
+    const debug = options.debug !== false; // default: true
+    const t0 = Date.now();
+    const log = (...a) => { if (debug) console.log(`[nav ${(Date.now() - t0).toFixed(0)}ms]`, ...a); };
+    const warn = (...a) => console.warn(`[nav WARN ${(Date.now() - t0).toFixed(0)}ms]`, ...a);
+
+    log('runMapa:start', { operacao: mapa.operacao, steps: mapa.steps?.length || 0, url });
+
     let downloadedPath = null;
 
     if (!url) throw new Error('"url" é obrigatório');
@@ -129,6 +137,11 @@ async function runMapa({ url, loginInfo, dados = {}, mapa, options = {} }) {
     });
     const page = await context.newPage();
 
+    log('context:created', { headless, downloadDir, userDataDir });
+    page.on('console', m => log('[page.console]', m.type(), m.text()));
+    page.on('pageerror', e => warn('[page.error]', e.message));
+    context.on('page', p => log('popup:opened', p.url()));
+
     page.setDefaultTimeout(timeoutMs);
     page.setDefaultNavigationTimeout(timeoutMs);
 
@@ -136,11 +149,17 @@ async function runMapa({ url, loginInfo, dados = {}, mapa, options = {} }) {
     const isXhr = r => ['xhr', 'fetch'].includes(r.resourceType?.());
 
     context.on('request', r => {
-        if (isXhr(r)) inflight.set(r, Date.now());
+        if (isXhr(r)) {
+            inflight.set(r, Date.now());
+            log('xhr++', r.method(), r.url());
+        }
     });
 
     context.on(['requestfinished', 'requestfailed'], r => {
-        if (isXhr(r)) inflight.delete(r);
+        if (isXhr(r)) {
+            inflight.delete(r);
+            log('xhr--', r.method(), r.url());
+        }
     });
 
     const inflightCount = () => {
@@ -148,16 +167,22 @@ async function runMapa({ url, loginInfo, dados = {}, mapa, options = {} }) {
         for (const [req, ts] of inflight) if (now - ts > longPollCutoffMs) inflight.delete(req);
         return inflight.size;
     };
+
     const quiet = async (deadline = maxQuietMs) => {
+        const started = Date.now();
+        const first = inflightCount();
+        log('quiet:start', { inflight: first, deadline });
         const start = Date.now(); let lastChange = Date.now(); let lastCount = inflightCount();
         while (Date.now() - start < deadline) {
             const c = inflightCount();
-            if (c === 0) return;
+            if (c === 0) { log('quiet:done', { took: Date.now() - started }); return; }
             if (c !== lastCount) { lastCount = c; lastChange = Date.now(); }
-            if (Date.now() - lastChange >= 300) return; // estável o bastante
+            if (Date.now() - lastChange >= 300) { log('quiet:stable', { inflight: c, took: Date.now() - started }); return; }
             await new Promise(r => setTimeout(r, 40));
         }
+        log('quiet:timeout', { inflight: inflightCount(), waited: Date.now() - started });
     };
+
     const closeAll = async () => {
         try { await context.close(); } catch { }
     };
@@ -169,9 +194,16 @@ async function runMapa({ url, loginInfo, dados = {}, mapa, options = {} }) {
   `;
 
     const robustClick = async ({ selector }) => {
+        log('click:start', selector);
         const loc = page.locator(selector).first();
         await loc.waitFor({ state: 'attached', timeout: timeoutMs });
-        try { await loc.click({ timeout: 400 }); return; } catch { }
+        try {
+            await loc.click({ timeout: 400 });
+            log('click:ok:direct', selector);
+            return;
+        } catch {
+            log('click:retry:reanchor', selector);
+        }
         const h = await loc.elementHandle();
         let cur = h;
         while (cur) {
@@ -180,9 +212,13 @@ async function runMapa({ url, loginInfo, dados = {}, mapa, options = {} }) {
                 const cs = getComputedStyle(el);
                 return !(cs.display === 'none' || cs.visibility === 'hidden' || +cs.opacity === 0);
             });
-            if (ok) { try { await cur.click({ timeout: 600 }); break; } catch { } }
+            if (ok) {
+                try { await cur.click({ timeout: 600 }); log('click:ok:ancestor', selector); break; }
+                catch (e) { warn('click:ancestor:fail', selector, e?.message); }
+            }
             const p = await cur.evaluateHandle(el => el.parentElement);
-            if (await p.evaluate(v => v == null)) break; cur = p;
+            if (await p.evaluate(v => v == null)) { warn('click:no-ancestor', selector); break; }
+            cur = p;
         }
         try { await h.dispose(); } catch { }
     };
@@ -203,11 +239,14 @@ async function runMapa({ url, loginInfo, dados = {}, mapa, options = {} }) {
 
         /* ---------- LOGIN ---------- */
         if (mapa.login) {
-            const { username, password, submit } = mapa.login;
+            log('login:begin');
             await page.locator(username).first().fill(loginInfo.usernameValue);
             await page.locator(password).first().fill(loginInfo.passwordValue);
+            log('login:filled');
             await robustClick({ selector: submit });
+            log('login:clicked');
             await quiet();
+            log('login:end');
         }
 
         /* ---------- PASSOS ---------- */
@@ -217,13 +256,15 @@ async function runMapa({ url, loginInfo, dados = {}, mapa, options = {} }) {
             const loc = page.locator(selector).first();
 
             if (meta.resultSelector === true) {
-                // Apenas testa sua existência
+                log('resultSelector:check', selector);
                 try {
                     await loc.waitFor({ state: 'attached', timeout: resultWaitMs });
-                    resultFound = true;
-                } catch { resultFound = false; }
-                break; // não executa mais nada antes do logout
+                    resultFound = true; log('resultSelector:found', selector);
+                } catch { resultFound = false; log('resultSelector:not-found', selector); }
+                break;
             }
+
+            log('step:start', { i, action: step.action, selector: step.selector, key: step.key, meta });
 
             switch (action) {
                 case 'fill': {
@@ -254,6 +295,9 @@ async function runMapa({ url, loginInfo, dados = {}, mapa, options = {} }) {
                         }
                         if (meta.networkTriggered) await quiet();
                     }
+
+                    log('step:done', { i, action });
+
                     break;
                 }
 
@@ -265,6 +309,9 @@ async function runMapa({ url, loginInfo, dados = {}, mapa, options = {} }) {
                     await loc.waitFor({ state: 'attached', timeout: timeoutMs });
                     const files = Array.isArray(dados[key]) ? dados[key] : [dados[key]];
                     await page.setInputFiles(selector, files);
+
+                    log('step:done', { i, action });
+
                     break;
                 }
 
@@ -282,6 +329,9 @@ async function runMapa({ url, loginInfo, dados = {}, mapa, options = {} }) {
                         } catch { /* continua mesmo se der timeout */ }
                     }
                     if (meta.networkTriggered) await quiet();
+
+                    log('step:done', { i, action });
+
                     break;
                 }
 
@@ -293,6 +343,9 @@ async function runMapa({ url, loginInfo, dados = {}, mapa, options = {} }) {
                         } catch { /* continua mesmo se der timeout */ }
                     }
                     if (meta.networkTriggered) await quiet();
+
+                    log('step:done', { i, action });
+
                     break;
                 }
 
@@ -304,6 +357,9 @@ async function runMapa({ url, loginInfo, dados = {}, mapa, options = {} }) {
                         } catch { /* continua mesmo se der timeout */ }
                     }
                     if (meta.networkTriggered) await quiet();
+
+                    log('step:done', { i, action });
+
                     break;
                 }
 
@@ -419,13 +475,19 @@ async function runMapa({ url, loginInfo, dados = {}, mapa, options = {} }) {
 
         /* ---------- LOGOUT ---------- */
         if (mapa.logout) {
-            try { await robustClick({ selector: mapa.logout }); await quiet(); } catch { }
+            try {
+                log('logout:click', mapa.logout);
+                await robustClick({ selector: mapa.logout });
+                await quiet();
+                log('end', { resultFound, downloadedPath: (mapa.operacao === 'baixar') ? downloadedPath : null });
+            } catch { }
         }
 
         await closeAll();
         return { resultFound, downloadedPath: (mapa.operacao === 'baixar') ? downloadedPath : null };
     }
     catch (err) {
+        warn('runMapa:error', err?.message);
         await closeAll();
         throw err;
     }
