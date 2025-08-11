@@ -86,7 +86,7 @@
       "key": "cidade_nasc",
       "meta": {
         "role": null,
-        "networkTriggered": false,
+        "networkTriggered": true,
         "text": null
       }
     },
@@ -265,7 +265,7 @@
       "key": "end_cidade",
       "meta": {
         "role": null,
-        "networkTriggered": false,
+        "networkTriggered": true,
         "text": null
       }
     },
@@ -541,7 +541,7 @@
       "key": "cidade_cnh",
       "meta": {
         "role": null,
-        "networkTriggered": false,
+        "networkTriggered": true,
         "text": null
       }
     },
@@ -612,6 +612,31 @@
         "options": [
           "-",
           "1 - ON TRANSPORTES RODOVIÁRIO LTDA (SORRISO/MT)"
+        ]
+      }
+    },
+    {
+      "action": "click",
+      "selector": "[name=\"formmotorista:Motorista_unidadeEmbarque\"]",
+      "meta": {
+        "role": null,
+        "networkTriggered": true,
+        "text": "-\n\t1 - MATRIZ (SORRISO/MT)\n\t2 - SORRISO MT (SORRISO/MT)\n\t3 - LUCAS DO RIO VERDE MT (LUCAS DO RIO VERDE/MT)\n\t4 - SEMENTES"
+      }
+    },
+    {
+      "action": "select",
+      "selector": "[name=\"formmotorista:Motorista_unidadeEmbarque\"]",
+      "key": "unidade_embarque",
+      "meta": {
+        "role": null,
+        "networkTriggered": false,
+        "options": [
+          "-",
+          "1 - MATRIZ (SORRISO/MT)",
+          "2 - SORRISO MT (SORRISO/MT)",
+          "3 - LUCAS DO RIO VERDE MT (LUCAS DO RIO VERDE/MT)",
+          "4 - SEMENTES (LUCAS DO RIO VERDE/MT)"
         ]
       }
     },
