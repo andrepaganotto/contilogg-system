@@ -227,12 +227,21 @@ async function runMapa({ url, loginInfo, dados = {}, mapa, options = {} }) {
             log('step:start', { i, action: step.action, selector: step.selector, key: step.key, meta });
 
             if (meta.resultSelector === true) {
-                // Apenas testa sua existência
+                // Apenas testa sua existência sem interagir com o elemento
                 try {
                     await loc.waitFor({ state: 'attached', timeout: resultWaitMs });
                     resultFound = true;
-                } catch { resultFound = false; }
-                break; // não executa mais nada antes do logout
+                }
+                catch {
+                    resultFound = false;
+                }
+
+                // Encerra imediatamente para evitar o clique do step
+                if (mapa.logout) {
+                    try { await robustClick({ selector: mapa.logout }); await quiet(); } catch { }
+                }
+                await closeAll();
+                return { resultFound, downloadedPath: (mapa.operacao === 'baixar') ? downloadedPath : null };
             }
 
             switch (action) {
