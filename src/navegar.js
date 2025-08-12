@@ -205,6 +205,7 @@ async function runMapa({ url, loginInfo, dados = {}, mapa, options = {} }) {
     };
 
     let resultFound = null;
+    let caughtError;
 
     try {
         await page.goto(url, { waitUntil: 'domcontentloaded', timeout: timeoutMs });
@@ -436,19 +437,18 @@ async function runMapa({ url, loginInfo, dados = {}, mapa, options = {} }) {
                     throw new Error(`Ação não suportada: ${action}`);
             }
         }
-
-        /* ---------- LOGOUT ---------- */
+    }
+    catch (err) {
+        caughtError = err;
+    }
+    finally {
         if (mapa.logout) {
             try { await robustClick({ selector: mapa.logout }); await quiet(); } catch { }
         }
-
         await closeAll();
-        return { resultFound, downloadedPath: (mapa.operacao === 'baixar') ? downloadedPath : null };
     }
-    catch (err) {
-        await closeAll();
-        throw err;
-    }
+    if (caughtError) throw caughtError;
+    return { resultFound, downloadedPath: (mapa.operacao === 'baixar') ? downloadedPath : null };
 }
 
 module.exports = { runMapa };
