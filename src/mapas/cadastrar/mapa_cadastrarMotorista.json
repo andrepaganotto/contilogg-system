@@ -171,15 +171,6 @@
     },
     {
       "action": "click",
-      "selector": "[name=\"formmotorista:Motorista_estadoCivil\"]",
-      "meta": {
-        "role": null,
-        "networkTriggered": true,
-        "text": "Solteiro(a)\n\tCasado(a)\n\tDivorciado(a)\n\tSeparado(a)\n\tAmasiado(a)\n\tViúvo(a)"
-      }
-    },
-    {
-      "action": "click",
       "selector": "#formmotorista\\:intab0_0\\:header > span.rf-tab-lbl:nth-child(1)",
       "meta": {
         "role": null,
