@@ -227,11 +227,21 @@ async function runMapa({ url, loginInfo, dados = {}, mapa, options = {} }) {
             log('step:start', { i, action: step.action, selector: step.selector, key: step.key, meta });
 
             if (meta.resultSelector === true) {
-                // Apenas testa sua existência
-                try {
-                    await loc.waitFor({ state: 'attached', timeout: resultWaitMs });
-                    resultFound = true;
-                } catch { resultFound = false; }
+                // Testa este e os próximos passos marcados com resultSelector
+                for (let j = i; j < mapa.steps.length; j++) {
+                    const rsStep = mapa.steps[j];
+                    if (rsStep.meta?.resultSelector === true) {
+                        try {
+                            await page.locator(rsStep.selector).first().waitFor({ state: 'attached', timeout: resultWaitMs });
+                            resultFound = true;
+                            break;
+                        } catch {
+                            resultFound = false;
+                        }
+                    } else {
+                        break;
+                    }
+                }
                 break; // não executa mais nada antes do logout
             }
 
