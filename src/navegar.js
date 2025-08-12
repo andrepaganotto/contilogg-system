@@ -177,22 +177,34 @@ async function runMapa({ url, loginInfo, dados = {}, mapa, options = {} }) {
   `;
 
     const robustClick = async ({ selector }) => {
+        const isNavError = err => /Execution context was destroyed|Target closed|context .*destroyed/i.test(String(err));
         const loc = page.locator(selector).first();
         await loc.waitFor({ state: 'attached', timeout: timeoutMs });
-        try { await loc.click({ timeout: 400 }); return; } catch { }
-        const h = await loc.elementHandle();
+        try { await loc.click({ timeout: 400 }); return; }
+        catch (err) { if (isNavError(err)) return; }
+        let h;
+        try { h = await loc.elementHandle(); }
+        catch (err) { if (isNavError(err)) return; else throw err; }
         let cur = h;
         while (cur) {
-            const ok = await cur.evaluate(el => {
-                const r = el.getClientRects(); if (!r.length) return false;
-                const cs = getComputedStyle(el);
-                return !(cs.display === 'none' || cs.visibility === 'hidden' || +cs.opacity === 0);
-            });
-            if (ok) { try { await cur.click({ timeout: 600 }); break; } catch { } }
-            const p = await cur.evaluateHandle(el => el.parentElement);
-            if (await p.evaluate(v => v == null)) break; cur = p;
+            try {
+                const ok = await cur.evaluate(el => {
+                    const r = el.getClientRects(); if (!r.length) return false;
+                    const cs = getComputedStyle(el);
+                    return !(cs.display === 'none' || cs.visibility === 'hidden' || +cs.opacity === 0);
+                });
+                if (ok) {
+                    try { await cur.click({ timeout: 600 }); break; }
+                    catch (err) { if (isNavError(err)) break; }
+                }
+                const p = await cur.evaluateHandle(el => el.parentElement);
+                const isNull = await p.evaluate(v => v == null).catch(() => true);
+                if (isNull) break; cur = p;
+            } catch (err) {
+                if (isNavError(err)) break; else throw err;
+            }
         }
-        try { await h.dispose(); } catch { }
+        try { await h?.dispose(); } catch { }
     };
 
     /* ---------- helpers específicos ---------- */
