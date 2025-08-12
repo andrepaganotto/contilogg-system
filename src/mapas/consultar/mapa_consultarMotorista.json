@@ -71,6 +71,16 @@
         "networkTriggered": true,
         "resultSelector": true
       }
+    },
+    {
+      "action": "click",
+      "selector": "[name=\"formmotorista:gravarmotorista\"]",
+      "meta": {
+        "role": null,
+        "networkTriggered": true,
+        "text": null,
+        "resultSelector": true
+      }
     }
   ],
   "logout": "#formMenu\\:j_idt10"
