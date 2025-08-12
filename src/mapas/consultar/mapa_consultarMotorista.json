@@ -68,7 +68,7 @@
       "meta": {
         "role": null,
         "text": "CLAUDIO ROBERTO CONTI FILHO",
-        "networkTriggered": true,
+        "networkTriggered": false,
         "resultSelector": true
       }
     },
@@ -77,7 +77,7 @@
       "selector": "[name=\"formmotorista:gravarmotorista\"]",
       "meta": {
         "role": null,
-        "networkTriggered": true,
+        "networkTriggered": false,
         "text": null,
         "resultSelector": true
       }
