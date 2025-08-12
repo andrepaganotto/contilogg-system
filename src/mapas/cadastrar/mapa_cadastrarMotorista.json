@@ -617,15 +617,6 @@
     },
     {
       "action": "click",
-      "selector": "[name=\"formmotorista:Motorista_filial\"]",
-      "meta": {
-        "role": null,
-        "networkTriggered": false,
-        "text": "-\n\t1 - ON TRANSPORTES RODOVIÁRIO LTDA (SORRISO/MT)"
-      }
-    },
-    {
-      "action": "click",
       "selector": "[name=\"formmotorista:Motorista_funcionario\"]",
       "meta": {
         "role": null,
@@ -644,6 +635,15 @@
           "Sim",
           "Não"
         ]
+      }
+    },
+    {
+      "action": "click",
+      "selector": "[name=\"formmotorista:Motorista_filial\"]",
+      "meta": {
+        "role": null,
+        "networkTriggered": false,
+        "text": "-\n\t1 - ON TRANSPORTES RODOVIÁRIO LTDA (SORRISO/MT)"
       }
     },
     {
