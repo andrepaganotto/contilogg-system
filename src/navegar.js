@@ -180,19 +180,30 @@ async function runMapa({ url, loginInfo, dados = {}, mapa, options = {} }) {
         const loc = page.locator(selector).first();
         await loc.waitFor({ state: 'attached', timeout: timeoutMs });
         try { await loc.click({ timeout: 400 }); return; } catch { }
-        const h = await loc.elementHandle();
-        let cur = h;
-        while (cur) {
-            const ok = await cur.evaluate(el => {
-                const r = el.getClientRects(); if (!r.length) return false;
-                const cs = getComputedStyle(el);
-                return !(cs.display === 'none' || cs.visibility === 'hidden' || +cs.opacity === 0);
-            });
-            if (ok) { try { await cur.click({ timeout: 600 }); break; } catch { } }
-            const p = await cur.evaluateHandle(el => el.parentElement);
-            if (await p.evaluate(v => v == null)) break; cur = p;
-        }
-        try { await h.dispose(); } catch { }
+        try {
+            const h = await loc.elementHandle();
+            let cur = h;
+            while (cur) {
+                let ok = false;
+                try {
+                    ok = await cur.evaluate(el => {
+                        const r = el.getClientRects(); if (!r.length) return false;
+                        const cs = getComputedStyle(el);
+                        return !(cs.display === 'none' || cs.visibility === 'hidden' || +cs.opacity === 0);
+                    });
+                } catch { break; }
+                if (ok) {
+                    try { await cur.click({ timeout: 600 }); break; } catch { }
+                }
+                let p;
+                try { p = await cur.evaluateHandle(el => el.parentElement); }
+                catch { break; }
+                const isNull = await p.evaluate(v => v == null).catch(() => true);
+                if (isNull) break;
+                cur = p;
+            }
+            try { await h.dispose(); } catch { }
+        } catch { }
     };
 
     /* ---------- helpers específicos ---------- */
@@ -205,6 +216,7 @@ async function runMapa({ url, loginInfo, dados = {}, mapa, options = {} }) {
     };
 
     let resultFound = null;
+    let caughtError;
 
     try {
         await page.goto(url, { waitUntil: 'domcontentloaded', timeout: timeoutMs });
@@ -436,19 +448,19 @@ async function runMapa({ url, loginInfo, dados = {}, mapa, options = {} }) {
                     throw new Error(`Ação não suportada: ${action}`);
             }
         }
-
-        /* ---------- LOGOUT ---------- */
+    }
+    catch (err) {
+        caughtError = err;
+    }
+    finally {
         if (mapa.logout) {
             try { await robustClick({ selector: mapa.logout }); await quiet(); } catch { }
         }
-
         await closeAll();
-        return { resultFound, downloadedPath: (mapa.operacao === 'baixar') ? downloadedPath : null };
     }
-    catch (err) {
-        await closeAll();
-        throw err;
-    }
+    if (caughtError && !/Execution context was destroyed/i.test(caughtError.message))
+        throw caughtError;
+    return { resultFound, downloadedPath: (mapa.operacao === 'baixar') ? downloadedPath : null };
 }
 
 module.exports = { runMapa };
