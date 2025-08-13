@@ -133,6 +133,65 @@
     },
     {
       "action": "click",
+      "selector": "[name=\"formmotorista:Motorista_cargo\"]",
+      "meta": {
+        "role": null,
+        "networkTriggered": false,
+        "text": "-\n\tADMINISTRATIVO\n\tADVOGADO\n\tALMOXARIFE\n\tASSIST.ADMINISTRATIVO\n\tASSIST.ADMINISTRATIVO APRENDIZ\n\tASSIST.DE FROTA\n\tASSIST."
+      }
+    },
+    {
+      "action": "select",
+      "selector": "[name=\"formmotorista:Motorista_cargo\"]",
+      "key": "motorista_cargo",
+      "meta": {
+        "role": null,
+        "networkTriggered": false,
+        "options": [
+          "-",
+          "ADMINISTRATIVO",
+          "ADVOGADO",
+          "ALMOXARIFE",
+          "ASSIST.ADMINISTRATIVO",
+          "ASSIST.ADMINISTRATIVO APRENDIZ",
+          "ASSIST.DE FROTA",
+          "ASSIST.DE TRANSPORTE",
+          "AUXILIAR ADMINISTRATIVO",
+          "AUXILIAR DE EMBARQUE",
+          "AUXILIAR DE FRENTISTA",
+          "AUXILIAR DE FROTA",
+          "AUXILIAR DE FUNILARIA",
+          "AUXILIAR DE LAVADOR",
+          "BORRACHEIRO",
+          "COPEIRA",
+          "ELETRICISTA DE INSTALAÇÕES",
+          "EMBARCADOR",
+          "ENCARREGADO DE ALMOXARIFADO",
+          "ENCARREGADO DE DPTO PESSOAL",
+          "FRENTISTA LUBRIFICADOR",
+          "GERENTE ADMINISTRATIVO",
+          "GERENTE COMERCIAL",
+          "GERENTE DE LOGISTICA",
+          "GERENTE DE TRANSPORTES",
+          "INSTRUTOR DE FROTA",
+          "JARDINEIRO",
+          "LAVADOR DE VEICULOS",
+          "MECANICO DE VEICULOS",
+          "MOTORISTA",
+          "MOTORISTA CARRETEIRO",
+          "PINTOR DE VEICULOS",
+          "PORTEIRO",
+          "RECEPCIONISTA",
+          "SERVICOS GERAIS",
+          "SUPERVISOR DE EMBARQUE",
+          "SUPERVISOR DE FROTA",
+          "SUPERVISOR FINANCEIRO",
+          "TECNICO EM REDE COMPUTADORES"
+        ]
+      }
+    },
+    {
+      "action": "click",
       "selector": "[name=\"formmotorista:Motorista_nomePai\"]",
       "meta": {
         "role": null,
